@@ -7,8 +7,12 @@
 > Add your thoughts on every TP bellow, everything is interresting but no need to right a book.
 > 
 > Keep it short simple and efficient:
-> 
-> - What you did and why
+> - What you did and why: j'ai effectué quelque changement premièrement dans l'importation du bibliothèque au lieu d'ecrire:
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+on peut écrire directement : import java.nio.file.*; import toutes les classes du package une seul fois.
+
 > - What helped you and why
 > - What did you find difficult
 > - What did not help you
