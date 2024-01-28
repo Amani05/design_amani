@@ -11,124 +11,111 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public class TodoApp {
+interface TodoRepository {
+    String readTodos(Path filePath);
 
-    private static final ObjectMapper objectMapper = new ObjectMapper();
+    void writeTodos(Path filePath, String content);
+}
 
-    public static void main(String[] args) {
+class JsonTodoRepository implements TodoRepository {
+    @Override
+    public String readTodos(Path filePath) {
         try {
-            System.exit(run(args));
+            String fileContent = Files.exists(filePath) ? Files.readString(filePath) : "";
+            ObjectMapper mapper = new ObjectMapper();
+            JsonNode actualObj = mapper.readTree(fileContent);
+            if (actualObj instanceof MissingNode) {
+                // Node was not recognized
+                actualObj = JsonNodeFactory.instance.arrayNode();
+            }
+            return actualObj.toString();
         } catch (IOException e) {
-            System.err.println("An error occurred: " + e.getMessage());
-            System.exit(1);
+            throw new RuntimeException("Error reading JSON file", e);
         }
     }
 
-    private static int run(String[] args) throws IOException {
-        CommandLine cmd = parseCommandLine(args);
-
-        String fileName = cmd.getOptionValue("s");
-        Path filePath = Paths.get(fileName);
-        String fileContent = getFileContent(filePath);
-
-        List<String> positionalArgs = cmd.getArgList();
-        if (positionalArgs.isEmpty()) {
-            System.err.println("Missing Command");
-            return 1;
-        }
-
-        String command = positionalArgs.get(0);
-
-        switch (command) {
-            case "insert":
-                return handleInsertCommand(positionalArgs, fileName, fileContent, filePath);
-
-            case "list":
-                handleListCommand(fileName, fileContent);
-                break;
-
-            default:
-                System.err.println("Unknown command: " + command);
-                return 1;
-        }
-
-        System.err.println("Done.");
-        return 0;
-    }
-
-    private static CommandLine parseCommandLine(String[] args) {
-        Options cliOptions = new Options();
-        cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
-
-        CommandLineParser parser = new DefaultParser();
+    @Override
+    public void writeTodos(Path filePath, String content) {
         try {
-            return parser.parse(cliOptions, args);
-        } catch (ParseException ex) {
-            System.err.println("Fail to parse arguments: " + ex.getMessage());
-            System.exit(1);
-            return null; // Unreachable, but required for compilation
+            Files.writeString(filePath, content);
+        } catch (IOException e) {
+            throw new RuntimeException("Error writing JSON file", e);
+        }
+    }
+}
+
+class CsvTodoRepository implements TodoRepository {
+    @Override
+    public String readTodos(Path filePath) {
+        try {
+            return Files.exists(filePath) ? Files.readString(filePath) : "";
+        } catch (IOException e) {
+            throw new RuntimeException("Error reading CSV file", e);
         }
     }
 
-    private static String getFileContent(Path filePath) throws IOException {
-        if (Files.exists(filePath)) {
-            return Files.readString(filePath);
+    @Override
+    public void writeTodos(Path filePath, String content) {
+        try {
+            if (!content.endsWith("\n") && !content.isEmpty()) {
+                content += "\n";
+            }
+            Files.writeString(filePath, content);
+        } catch (IOException e) {
+            throw new RuntimeException("Error writing CSV file", e);
         }
-        return "";
+    }
+}
+
+interface TodoManager {
+    void execute(String command, List<String> positionalArgs);
+}
+
+class TodoManagerImpl implements TodoManager {
+    private final TodoRepository todoRepository;
+
+    public TodoManagerImpl(TodoRepository todoRepository) {
+        this.todoRepository = todoRepository;
     }
 
-    private static int handleInsertCommand(List<String> positionalArgs, String fileName, String fileContent, Path filePath) throws IOException {
+    @Override
+    public void execute(String command, List<String> positionalArgs) {
+        if (command.equals("insert")) {
+            insert(positionalArgs);
+        } else if (command.equals("list")) {
+            list();
+        } else {
+            System.err.println("Unknown command");
+        }
+    }
+
+    private void insert(List<String> positionalArgs) {
         if (positionalArgs.size() < 2) {
             System.err.println("Missing TODO name");
-            return 1;
+        } else {
+            String todo = positionalArgs.get(1);
+            String todos = todoRepository.readTodos(getFilePath());
+            todos += todo;
+            todoRepository.writeTodos(getFilePath(), todos);
         }
-
-        String todo = positionalArgs.get(1);
-
-        if (fileName.endsWith(".json")) {
-            handleJsonInsert(fileContent, todo, filePath);
-        } else if (fileName.endsWith(".csv")) {
-            handleCsvInsert(fileContent, todo, filePath);
-        }
-
-        return 0;
     }
 
-    private static void handleJsonInsert(String fileContent, String todo, Path filePath) throws IOException {
+    private void list() {
+        String todos = todoRepository.readTodos(getFilePath());
+        if (getFilePath().endsWith(".json")) {
+            // JSON
+            listJsonTodos(todos);
+        } else if (getFilePath().endsWith(".csv")) {
+            // CSV
+            listCsvTodos(todos);
+        }
+    }
+
+    private void listJsonTodos(String todos) {
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode actualObj = mapper.readTree(fileContent);
+        JsonNode actualObj = mapper.readTree(todos);
         if (actualObj instanceof MissingNode) {
-            actualObj = JsonNodeFactory.instance.arrayNode();
-        }
-
-        if (actualObj instanceof ArrayNode arrayNode) {
-            arrayNode.add(todo);
-        }
-
-        Files.writeString(filePath, actualObj.toString());
-    }
-
-    private static void handleCsvInsert(String fileContent, String todo, Path filePath) throws IOException {
-        if (!fileContent.endsWith("\n") && !fileContent.isEmpty()) {
-            fileContent += "\n";
-        }
-        fileContent += todo;
-
-        Files.writeString(filePath, fileContent);
-    }
-
-    private static void handleListCommand(String fileName, String fileContent) {
-        if (fileName.endsWith(".json")) {
-            handleJsonList(fileContent);
-        } else if (fileName.endsWith(".csv")) {
-            handleCsvList(fileContent);
-        }
-    }
-
-    private static void handleJsonList(String fileContent) {
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode actualObj = mapper.readTree(fileContent);
-        if (actualObj instanceof MissingNode) {
+            // Node was not recognized
             actualObj = JsonNodeFactory.instance.arrayNode();
         }
 
@@ -137,10 +124,77 @@ public class TodoApp {
         }
     }
 
-    private static void handleCsvList(String fileContent) {
-        System.out.println(Arrays.stream(fileContent.split("\n"))
+    private void listCsvTodos(String todos) {
+        System.out.println(Arrays.stream(todos.split("\n"))
                 .map(todo -> "- " + todo)
                 .collect(Collectors.joining("\n"))
         );
     }
+
+    private Path getFilePath() {
+        CommandLine cmd = parseCommandLine();
+        String fileName = cmd.getOptionValue("s");
+        return Paths.get(fileName);
+    }
+
+    private CommandLine parseCommandLine() {
+        Options cliOptions = new Options();
+        cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
+        CommandLineParser parser = new DefaultParser();
+
+        try {
+            return parser.parse(cliOptions, getArgs());
+        } catch (ParseException ex) {
+            System.err.println("Fail to parse arguments: " + ex.getMessage());
+            System.exit(1);
+            return null; // Unreachable, added to satisfy the compiler
+        }
+    }
+
+    private String[] getArgs() {
+        return new String[0]; // Replace with actual method to retrieve command line arguments
+    }
 }
+
+/**
+ * Hello world!
+ */
+public class App {
+    /**
+     * Do not change this method
+     */
+    public static void main(String[] args) {
+        TodoRepository todoRepository = determineTodoRepository(args);
+        TodoManager todoManager = new TodoManagerImpl(todoRepository);
+
+        System.exit(todoManager.execute(args));
+    }
+
+    private static TodoRepository determineTodoRepository(String[] args) {
+        CommandLine cmd = parseCommandLine(args);
+        String fileName = cmd.getOptionValue("s");
+
+        if (fileName.endsWith(".json")) {
+            return new JsonTodoRepository();
+        } else if (fileName.endsWith(".csv")) {
+            return new CsvTodoRepository();
+        } else {
+            throw new IllegalArgumentException("Unsupported file format");
+        }
+    }
+
+    private static CommandLine parseCommandLine(String[] args) {
+        Options cliOptions = new Options();
+        cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
+        CommandLineParser parser = new DefaultParser();
+
+        try {
+            return parser.parse(cliOptions, args);
+        } catch (ParseException ex) {
+            System.err.println("Fail to parse arguments: " + ex.getMessage());
+            System.exit(1);
+            return null; // Unreachable, added to satisfy the compiler
+        }
+    }
+}
+
