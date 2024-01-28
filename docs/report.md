@@ -13,13 +13,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 on peut écrire directement : import java.nio.file.*; import toutes les classes du package une seul fois.
->Réorganisation en approche orientée objet : j'ai organisé le code et utiliser TodoApp qui encapsule les fonctionnalités de l'application.
->Utilisation d'une seule instance ObjectMapper : J'ai créé une seule instance d'ObjectMapper en tant que variable statique pour améliorer l'efficacité, plutôt que de créer une nouvelle instance à chaque fois que nécessaire.
->Gestion des erreurs : J'ai modifié la gestion des erreurs pour utiliser des exceptions plutôt que d'imprimer directement sur System.err et de terminer le programme avec System.exit(1)
->séparation ; j'ai utiliser des méthode plus petit pour faciliter la maintenance
->Utilisation d'une méthode run : J'ai introduit une méthode run pour encapsuler la logique principale du programme
->Suppression des dépendances Apache Commons CLI : J'ai retiré la dépendance à Apache Commons CLI pour simplifier le code
-
+>J'ai instauré une séparation des tâches en instiguant des interfaces distinctes pour superviser les Todos (TodoRepository) et pour exécuter les commandes (TodoManager). Chacune de ces classes est assignée à une responsabilité bien définie, accomplissant une seule fonction.
+>L'intégration d'interfaces (TodoRepository et TodoManager) a rendu possible leur extension pour de nouveaux formats de fichier ou de nouvelles fonctionnalités sans nécessiter de modification du code existant. Les implémentations spécifiques, telles que JsonTodoRepository et CsvTodoRepository, peuvent être ajoutées sans altérer la logique fondamentale.
+>Les classes JsonTodoRepository et CsvTodoRepository sont des sous-classes de l'interface TodoRepository, assurant ainsi l'interopérabilité de ces classes avec TodoRepository.
+>Les interfaces TodoRepository et TodoManager ont été conçues spécifiquement pour leurs tâches respectives, évitant ainsi la création d'interfaces trop étendues.
+>La classe TodoManagerImpl dépend désormais de l'abstraction TodoRepository, permettant la définition de comportements spécifiques dans les implémentations concrètes (JsonTodoRepository et CsvTodoRepository). La dépendance a été inversée par rapport à la version originale.
+>J'ai également inclus des méthodes privées afin de rendre les fonctions de la classe TodoManagerImpl plus compréhensibles et mieux structurées.
+>
 > Add a link to schemas describing your architecture (UML or not but add a legend)
 > 
 > Remember: it is ok to make mistakes, you will have time to spot them later.
