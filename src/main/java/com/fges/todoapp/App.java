@@ -73,9 +73,11 @@ interface TodoManager {
 
 class TodoManagerImpl implements TodoManager {
     private final TodoRepository todoRepository;
+    private CommandLine cmd;
 
-    public TodoManagerImpl(TodoRepository todoRepository) {
+    public TodoManagerImpl(TodoRepository todoRepository, CommandLine cmd) {
         this.todoRepository = todoRepository;
+        this.cmd = cmd;
     }
 
     @Override
@@ -94,6 +96,9 @@ class TodoManagerImpl implements TodoManager {
             System.err.println("Missing TODO name");
         } else {
             String todo = positionalArgs.get(1);
+            if (cmd.hasOption("d")) {
+                todo = "[Done] " + todo;
+            }
             String todos = todoRepository.readTodos(getFilePath());
             todos += todo;
             todoRepository.writeTodos(getFilePath(), todos);
@@ -102,12 +107,32 @@ class TodoManagerImpl implements TodoManager {
 
     private void list() {
         String todos = todoRepository.readTodos(getFilePath());
-        if (getFilePath().endsWith(".json")) {
+        if (cmd.hasOption("d")) {
+            // Only show done todos
+            listDoneTodos(todos);
+        } else if (getFilePath().endsWith(".json")) {
             // JSON
             listJsonTodos(todos);
         } else if (getFilePath().endsWith(".csv")) {
             // CSV
             listCsvTodos(todos);
+        }
+    }
+
+    private void listDoneTodos(String todos) {
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode actualObj = mapper.readTree(todos);
+        if (actualObj instanceof MissingNode) {
+            // Node was not recognized
+            actualObj = JsonNodeFactory.instance.arrayNode();
+        }
+
+        if (actualObj instanceof ArrayNode arrayNode) {
+            arrayNode.forEach(node -> {
+                if (node.toString().startsWith("[Done]")) {
+                    System.out.println("- " + node.toString());
+                }
+            });
         }
     }
 
@@ -132,27 +157,8 @@ class TodoManagerImpl implements TodoManager {
     }
 
     private Path getFilePath() {
-        CommandLine cmd = parseCommandLine();
         String fileName = cmd.getOptionValue("s");
         return Paths.get(fileName);
-    }
-
-    private CommandLine parseCommandLine() {
-        Options cliOptions = new Options();
-        cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
-        CommandLineParser parser = new DefaultParser();
-
-        try {
-            return parser.parse(cliOptions, getArgs());
-        } catch (ParseException ex) {
-            System.err.println("Fail to parse arguments: " + ex.getMessage());
-            System.exit(1);
-            return null; // Unreachable, added to satisfy the compiler
-        }
-    }
-
-    private String[] getArgs() {
-        return new String[0]; // Replace with actual method to retrieve command line arguments
     }
 }
 
@@ -164,14 +170,14 @@ public class App {
      * Do not change this method
      */
     public static void main(String[] args) {
-        TodoRepository todoRepository = determineTodoRepository(args);
-        TodoManager todoManager = new TodoManagerImpl(todoRepository);
+        CommandLine cmd = parseCommandLine(args);
+        TodoRepository todoRepository = determineTodoRepository(cmd);
+        TodoManager todoManager = new TodoManagerImpl(todoRepository, cmd);
 
-        System.exit(todoManager.execute(args));
+        System.exit(todoManager.execute(args[0], Arrays.asList(args).subList(1, args.length)));
     }
 
-    private static TodoRepository determineTodoRepository(String[] args) {
-        CommandLine cmd = parseCommandLine(args);
+    private static TodoRepository determineTodoRepository(CommandLine cmd) {
         String fileName = cmd.getOptionValue("s");
 
         if (fileName.endsWith(".json")) {
@@ -186,6 +192,7 @@ public class App {
     private static CommandLine parseCommandLine(String[] args) {
         Options cliOptions = new Options();
         cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
+        cliOptions.addOption("d", "done", false, "Mark the todo as done");
         CommandLineParser parser = new DefaultParser();
 
         try {
@@ -197,4 +204,3 @@ public class App {
         }
     }
 }
-
