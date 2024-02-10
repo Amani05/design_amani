@@ -28,7 +28,15 @@ on modifier la méthode parseCommandLine dans la classe TodoManagerImpl pour pre
 Si le paramètre --done est spécifié, marquez le todo comme "done" avant de l'ajouter.
 3/   on fait la faite à jour la méthode list pour afficher les todos "done" si le paramètre --done est spécifié 
  Si le paramètre --done est spécifié, n'affichez que les todos marqués comme "done".
-> Add a link to schemas describing your architecture (UML or not but add a legend)
+ 
+// Aprés l'amlioration 
+1/ j'ai essayé de refaire les principes solid. 
+2/ ajouter l'option --donnée à mon interface de ligne de commande dans la méthode process de la classe CommandLineProcessor comme suit : 
+cliOptions.addOption(Option.builder("d")
+                    .longOpt("done")
+                    .desc("Flag to mark a task as done")
+                    .build());
+3/ Ensuite, dans la méthode execute de la classe TodoManager, j'ai essayé de   vérifier si l'option --done a été spécifiée et, le cas échéant, marquer la tâche comme terminée. 
 > 
 > Remember: it is ok to make mistakes, you will have time to spot them later.
 > 
