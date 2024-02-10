@@ -37,8 +37,7 @@ cliOptions.addOption(Option.builder("d")
                     .desc("Flag to mark a task as done")
                     .build());
 3/ Ensuite, dans la méthode execute de la classe TodoManager, j'ai essayé de   vérifier si l'option --done a été spécifiée et, le cas échéant, marquer la tâche comme terminée. 
-4/ app.java c'est le premier modéle 
-TodoApp : mon modéle (le modéle améliorer) 
+
 > Remember: it is ok to make mistakes, you will have time to spot them later.
 > 
 > Fill free to contact me if needed.
