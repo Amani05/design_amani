@@ -1,212 +1,213 @@
 package com.fges.todoapp;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
-import com.fasterxml.jackson.databind.node.MissingNode;
-import org.apache.commons.cli.*;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
+import org.apache.commons.cli.*;
 
-public class TodoApp {
+/**
+ * Représente une tâche dans la liste des TODOs.
+ */
+class TodoItem {
+    public String task; // Le libellé de la tâche
+    public boolean done; // Indique si la tâche est accomplie
+
+    // Constructeur par défaut nécessaire pour la désérialisation JSON
+    public TodoItem() {
+    }
+
+    // Constructeur pour créer une nouvelle tâche avec un libellé et un état (accomplie ou non)
+    public TodoItem(String task, boolean done) {
+        this.task = task;
+        this.done = done;
+    }
+}
+
+/**
+ * Interface définissant les opérations de base pour la gestion des fichiers de tâches TODO.
+ */
+interface TodoFileManager {
+    void insert(String todo, boolean isDone, Path filePath) throws IOException; // Insère une nouvelle tâche
+    void list(Path filePath, boolean onlyDone) throws IOException; // Liste les tâches, avec filtre optionnel sur les tâches accomplies
+    List<TodoItem> readAll(Path filePath) throws IOException; // Lit toutes les tâches depuis le fichier
+}
+
+/**
+ * Gestionnaire pour les fichiers au format JSON.
+ */
+class JsonFileManager implements TodoFileManager {
+    private final ObjectMapper mapper = new ObjectMapper(); // ObjectMapper pour la sérialisation/désérialisation JSON
+
+    @Override
+    public void insert(String todo, boolean isDone, Path filePath) throws IOException {
+        List<TodoItem> todos = readAll(filePath);
+        todos.add(new TodoItem(todo, isDone));
+        Files.writeString(filePath, mapper.writeValueAsString(todos));
+    }
+
+    @Override
+    public void list(Path filePath, boolean onlyDone) throws IOException {
+        List<TodoItem> todos = readAll(filePath);
+        todos.stream()
+            .filter(item -> !onlyDone || item.done)
+            .forEach(item -> System.out.println("- " + (item.done ? "Done: " : "") + item.task));
+    }
+
+    @Override
+    public List<TodoItem> readAll(Path filePath) throws IOException {
+        if (Files.exists(filePath)) {
+            return mapper.readValue(Files.readString(filePath), new TypeReference<List<TodoItem>>() {});
+        }
+        return new ArrayList<>();
+    }
+}
+
+/**
+ * Gestionnaire pour les fichiers au format CSV.
+ */
+class CsvFileManager implements TodoFileManager {
+    @Override
+    public void insert(String todo, boolean isDone, Path filePath) throws IOException {
+        List<TodoItem> todos = readAll(filePath);
+        todos.add(new TodoItem(todo, isDone));
+        String content = todos.stream()
+                .map(item -> "\"" + item.task + "\"," + item.done)
+                .collect(Collectors.joining("\n"));
+        Files.writeString(filePath, content);
+    }
+
+    @Override
+    public void list(Path filePath, boolean onlyDone) throws IOException {
+        List<TodoItem> todos = readAll(filePath);
+        todos.stream()
+            .filter(item -> !onlyDone || item.done)
+            .forEach(item -> System.out.println("- " + (item.done ? "Done: " : "") + item.task));
+    }
+
+    @Override
+    public List<TodoItem> readAll(Path filePath) throws IOException {
+        if (Files.exists(filePath)) {
+            String content = Files.readString(filePath);
+            return Arrays.stream(content.split("\n"))
+                    .map(line -> line.split(",", -1))
+                    .filter(parts -> parts.length >= 2)
+                    .map(parts -> new TodoItem(parts[0].replace("\"", ""), Boolean.parseBoolean(parts[1])))
+                    .collect(Collectors.toList());
+        }
+        return new ArrayList<>();
+    }
+}
+
+/**
+ * Application principale pour la gestion des tâches TODO.
+ */
+public class App {
     public static void main(String[] args) {
-        CommandLineProcessor commandLineProcessor = new CommandLineProcessor(new TodoManager());
-        commandLineProcessor.process(args);
+        System.exit(exec(args));
     }
 
-    static class CommandLineProcessor {
-        private final CommandExecutor commandExecutor;
+    /**
+     * Gère l'exécution des commandes passées en argument.
+     * @param args Les arguments de la ligne de commande.
+     * @return Le code de sortie de l'application.
+     */
+    public static int exec(String[] args) {
+        Options cliOptions = new Options();
+        CommandLineParser parser = new DefaultParser();
+        cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
+        cliOptions.addOption("d", "done", false, "Mark todo as done or list only done todos");
+        cliOptions.addOption("o", "output", true, "Output file for migration");
 
-        public CommandLineProcessor(CommandExecutor commandExecutor) {
-            this.commandExecutor = commandExecutor;
-        }
-
-        public void process(String[] args) {
-            Options cliOptions = new Options();
-            CommandLineParser parser = new DefaultParser();
-
-            cliOptions.addRequiredOption("s", "source", true, "File containing the todos");
-            cliOptions.addOption(Option.builder("d")
-                    .longOpt("done")
-                    .desc("Flag to mark a task as done")
-                    .build());
-
-            CommandLine cmd;
-            try {
-                cmd = parser.parse(cliOptions, args);
-            } catch (ParseException ex) {
-                System.err.println("Fail to parse arguments: " + ex.getMessage());
-                return;
-            }
-
-            String fileName = cmd.getOptionValue("s");
-
-            try {
-                int exitCode = commandExecutor.execute(cmd, fileName);
-                System.exit(exitCode);
-            } catch (IOException e) {
-                System.err.println("Error occurred: " + e.getMessage());
-                System.exit(1);
-            }
-        }
-    }
-
-    interface CommandExecutor {
-        int execute(CommandLine cmd, String fileName) throws IOException;
-    }
-
-    static class TodoManager implements CommandExecutor {
-        @Override
-        public int execute(CommandLine cmd, String fileName) throws IOException {
-            String command = cmd.getArgList().get(0);
-
-            Path filePath = Paths.get(fileName);
-            String fileContent = Files.exists(filePath) ? Files.readString(filePath) : "";
-
-            if (cmd.hasOption("d")) {
-                markTaskAsDone(cmd, fileName, filePath, fileContent);
-                return 0;
-            }
-
-            if (command.equals("insert")) {
-                return insertTodo(cmd, fileName, filePath, fileContent);
-            }
-
-            if (command.equals("list")) {
-                listTodos(cmd, fileName, fileContent);
-                return 0;
-            }
-
-            System.err.println("Unknown command: " + command);
+        CommandLine cmd = null;
+        try {
+            cmd = parser.parse(cliOptions, args);
+        } catch (ParseException ex) {
+            System.err.println("Error parsing command line options: " + ex.getMessage());
             return 1;
         }
 
-        private int insertTodo(CommandLine cmd, String fileName, Path filePath, String fileContent) throws IOException {
-            if (cmd.getArgList().size() < 2) {
-                System.err.println("Missing TODO name");
-                return 1;
-            }
-            String todo = cmd.getArgList().get(1);
+        String fileName = cmd.getOptionValue("s");
+        boolean isDone = cmd.hasOption("d");
+        String outputFileName = cmd.getOptionValue("o");
+        List<String> positionalArgs = cmd.getArgList();
 
-            if (fileName.endsWith(".json")) {
-                ObjectMapper mapper = new ObjectMapper();
-                JsonNode actualObj = mapper.readTree(fileContent);
-                if (actualObj instanceof MissingNode) {
-                    actualObj = JsonNodeFactory.instance.arrayNode();
-                }
-
-                if (actualObj instanceof ArrayNode arrayNode) {
-                    arrayNode.add(todo);
-                }
-
-                Files.writeString(filePath, actualObj.toString());
-            }
-            if (fileName.endsWith(".csv")) {
-                if (!fileContent.endsWith("\n") && !fileContent.isEmpty()) {
-                    fileContent += "\n";
-                }
-                fileContent += todo;
-
-                Files.writeString(filePath, fileContent);
-            }
-            return 0;
+        if (positionalArgs.isEmpty()) {
+            System.err.println("Missing Command");
+            return 1;
         }
 
-        private void listTodos(CommandLine cmd, String fileName, String fileContent) {
-            boolean showDoneTasks = cmd.hasOption("d");
+        String command = positionalArgs.get(0);
+        Path filePath = Path.of(fileName);
+        Path outputPath = outputFileName != null ? Path.of(outputFileName) : null;
 
-            if (fileName.endsWith(".json")) {
-                if (showDoneTasks) {
-                    System.out.println("Done tasks:");
-                    ObjectMapper mapper = new ObjectMapper();
-                    try {
-                        JsonNode actualObj = mapper.readTree(fileContent);
-                        if (actualObj instanceof MissingNode) {
-                            actualObj = JsonNodeFactory.instance.arrayNode();
-                        }
+        try {
+            TodoFileManager manager = getFileManager(filePath);
 
-                        if (actualObj instanceof ArrayNode arrayNode) {
-                            arrayNode.forEach(node -> {
-
-                            });
-                        }
-                    } catch (IOException e) {
-                        System.err.println("Error reading JSON: " + e.getMessage());
+            switch (command) {
+                case "insert":
+                    if (positionalArgs.size() < 2) {
+                        System.err.println("Missing TODO name");
+                        return 1;
                     }
-                } else {
-                    System.out.println("All tasks:");
-                    ObjectMapper mapper = new ObjectMapper();
-                    try {
-                        JsonNode actualObj = mapper.readTree(fileContent);
-                        if (actualObj instanceof MissingNode) {
-                            actualObj = JsonNodeFactory.instance.arrayNode();
-                        }
-
-                        if (actualObj instanceof ArrayNode arrayNode) {
-                            arrayNode.forEach(node -> {
-                                System.out.println("- " + node.toString());
-                            });
-                        }
-                    } catch (IOException e) {
-                        System.err.println("Error reading JSON: " + e.getMessage());
-                    }
-                }
-            }  else if (fileName.endsWith(".csv")) {
-                if (showDoneTasks) {
-                    System.out.println("Done tasks:");
-                    Arrays.stream(fileContent.split("\n")).forEach(task -> {
-
-                    });
-                } else {
-                    System.out.println("All tasks:");
-                    Arrays.stream(fileContent.split("\n")).forEach(task -> {
-                        System.out.println("- " + task);
-                    });
-                }
-            }
-        }
-
-        private void markTaskAsDone(CommandLine cmd, String fileName, Path filePath, String fileContent) throws IOException {
-            if (cmd.getArgList().size() < 2) {
-                System.err.println("Missing task name");
-                return;
-            }
-            String task = cmd.getArgList().get(1);
-
-            
-            String updatedFileContent = markTaskAsDoneInFileContent(task, fileContent);
-
-            Files.writeString(filePath, updatedFileContent);
-
-            System.out.println("Task '" + task + "' marked as done.");
-        }
-
-        private String markTaskAsDoneInFileContent(String task, String fileContent) {
-            
-            String[] lines = fileContent.split("\n");
-            for (int i = 0; i < lines.length; i++) {
-                if (lines[i].trim().equals(task)) {
-                    
-                    lines[i] += " [DONE]";
+                    String todo = positionalArgs.get(1);
+                    manager.insert(todo, isDone, filePath);
                     break;
-                }
+                case "list":
+                    manager.list(filePath, isDone);
+                    break;
+                case "migrate":
+                    if (outputPath == null) {
+                        System.err.println("Missing output file for migration");
+                        return 1;
+                    }
+                    migrate(manager, getFileManager(outputPath), filePath, outputPath);
+                    break;
+                default:
+                    System.err.println("Unknown command: " + command);
+                    return 1;
             }
-            
-            return String.join("\n", lines);
+        } catch (IOException ex) {
+            System.err.println("An I/O error occurred: " + ex.getMessage());
+            return 1;
         }
 
+        System.out.println("Done.");
+        return 0;
+    }
 
-
-
-
-
+    /**
+     * Migre les tâches TODO d'un fichier vers un autre, en respectant le format spécifié.
+     * @param sourceManager Gestionnaire du fichier source.
+     * @param outputManager Gestionnaire du fichier de destination.
+     * @param sourcePath Chemin du fichier source.
+     * @param outputPath Chemin du fichier de destination.
+     * @throws IOException Si une erreur d'entrée/sortie se produit.
+     */
+    private static void migrate(TodoFileManager sourceManager, TodoFileManager outputManager, Path sourcePath, Path outputPath) throws IOException {
+        List<TodoItem> todos = sourceManager.readAll(sourcePath);
+        for (TodoItem todo : todos) {
+            outputManager.insert(todo.task, todo.done, outputPath);
         }
     }
 
-
+    /**
+     * Sélectionne le gestionnaire de fichiers approprié en fonction de l'extension du fichier.
+     * @param filePath Le chemin du fichier pour lequel un gestionnaire est requis.
+     * @return Une instance de TodoFileManager adaptée au type de fichier.
+     */
+    private static TodoFileManager getFileManager(Path filePath) {
+        if (filePath.toString().endsWith(".json")) {
+            return new JsonFileManager();
+        } else if (filePath.toString().endsWith(".csv")) {
+            return new CsvFileManager();
+        } else {
+            throw new IllegalArgumentException("Unsupported file format: " + filePath);
+        }
+    }
+}
