@@ -38,9 +38,12 @@ cliOptions.addOption(Option.builder("d")
                     .build());
 3/ Ensuite, dans la méthode execute de la classe TodoManager, j'ai essayé de   vérifier si l'option --done a été spécifiée et, le cas échéant, marquer la tâche comme terminée. 
 
-> Remember: it is ok to make mistakes, you will have time to spot them later.
-> 
-> Fill free to contact me if needed.
+TP NUM 02
+Composants principaux
+TodoItem : Une classe représentant une tâche individuelle avec deux propriétés principales : task (le libellé de la tâche) et done (l'état de la tâche, accomplie ou non).
+TodoFileManager : Une interface définissant les opérations essentielles (insert, list, readAll) que doivent implémenter les gestionnaires de fichiers.
+JsonFileManager et CsvFileManager : Des classes concrètes implémentant TodoFileManager pour gérer respectivement les fichiers au format JSON et CSV.
+App : La classe principale qui orchestre l'exécution des commandes utilisateur basées sur les arguments de la ligne de commande.
 
 ---
 ...
