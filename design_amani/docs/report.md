@@ -39,3 +39,6 @@
 
 # il m'a affiché les memes résultat 
 ---
+
+3/creer un fichier pom1.xml situé à la racine de mon projet.
+ On Ajoute les balises <dependencies> et <dependency> pour inclure les dépendances Spring Boot.
