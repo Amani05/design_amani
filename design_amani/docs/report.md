@@ -3,14 +3,39 @@
 - **Firstname**: [Amani]
 - **Lastname**: [YAHIA BEY]
 
+- 
+# TP FINAL : ( Les changements dans le dossier "design_amani" )
 
+1/ j'ai dévisé mon projet sur des fichier : chaque classe a leur propre code 
+*App.java 
+*CsvFileManger
+*jsonFileManager
+*ToDoFileManager
+*Todoitem
 
-TP NUM 02
-Composants principaux
-TodoItem : Une classe représentant une tâche individuelle avec deux propriétés principales : task (le libellé de la tâche) et done (l'état de la tâche, accomplie ou non).
-TodoFileManager : Une interface définissant les opérations essentielles (insert, list, readAll) que doivent implémenter les gestionnaires de fichiers.
-JsonFileManager et CsvFileManager : Des classes concrètes implémentant TodoFileManager pour gérer respectivement les fichiers au format JSON et CSV.
-App : La classe principale qui orchestre l'exécution des commandes utilisateur basées sur les arguments de la ligne de commande.
+2/ j'ai essayé les teste du cours 
+./exec.sh insert -s toto.json "I am not done and stored in JSON"
+ Status code: 0
 
+./exec.sh insert -d "I am done and stored in CSV" -s toto.csv
+ Status code: 0
+
+./exec.sh --source toto.csv insert -d "I am not done and stored in CSV"
+ Status code: 0
+
+./exec.sh insert "I am done" --done -s file.json
+./exec.sh insert "I am not done" -s file.json
+
+ List all todos
+./exec.sh list -s file.json
+ Stdout:
+ - Done: I am done
+ - I am not done
+
+ List done todos
+./exec.sh list -s file.json --done
+ Stdout:
+ - Done: I am done
+
+# il m'a affiché les memes résultat 
 ---
-...
