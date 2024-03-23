@@ -3,7 +3,7 @@
 - **Firstname**: [Amani]
 - **Lastname**: [YAHIA BEY]
 - 
-# TP FINAL : ( Les changement dans le dossier "design_amani" )
+# TP FINAL : ( Les changements dans le dossier "design_amani" )
 
 1/ j'ai dévisé mon projet sur des fichier : chaque classe a leur propre code 
 *App.java 
